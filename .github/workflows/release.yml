@@ -17,12 +17,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 'lts/*'
           cache: npm
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run build
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.SR_APP_ID }}
+          private-key: ${{ secrets.SR_PRIVATE_KEY }}
+      - name: Configure Git
+        run: |
+          git config --global user.name "semantic-release-idty[bot]"
+          git config --global user.email "semantic-release-idty[bot]@users.noreply.github.com"
       - run: npx semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
