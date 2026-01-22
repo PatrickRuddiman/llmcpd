@@ -120,21 +120,50 @@ export class DeepCrawler {
 
   private async runWorker(task: CrawlTask): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Resolve worker path relative to the current module
-      // When bundled, this will be in dist/chunk-*.js, but the worker is in dist/indexing/
-      let workerPath = join(__dirname, "crawler-worker.js");
-      
-      // Try alternative path for bundled version
-      if (!existsSync(workerPath)) {
-        workerPath = join(__dirname, "indexing", "crawler-worker.js");
-      }
-      
-      const worker = new Worker(workerPath, {
-        workerData: { task },
-      });
-
       let settled = false;
 
+      // Resolve worker path relative to the current module
+      // When bundled, this will be in dist/chunk-*.js, but the worker is in dist/indexing/
+      const primaryPath = join(__dirname, "crawler-worker.js");
+      const alternativePath = join(__dirname, "indexing", "crawler-worker.js");
+
+      let workerPath: string | null = null;
+
+      if (existsSync(primaryPath)) {
+        workerPath = primaryPath;
+      } else if (existsSync(alternativePath)) {
+        workerPath = alternativePath;
+      }
+
+      // If no valid worker path could be found, log and resolve without starting a worker
+      if (!workerPath) {
+        this.activeWorkers--;
+        settled = true;
+        if (this.options.verbose) {
+          console.error(
+            "Unable to locate crawler worker file. Tried paths:",
+            primaryPath,
+            alternativePath,
+          );
+        }
+        resolve();
+        return;
+      }
+
+      let worker: Worker;
+      try {
+        worker = new Worker(workerPath, {
+          workerData: { task },
+        });
+      } catch (error) {
+        this.activeWorkers--;
+        settled = true;
+        if (this.options.verbose) {
+          console.error(`Failed to start worker for ${task.url}:`, error);
+        }
+        resolve();
+        return;
+      }
       const cleanupAndResolve = () => {
         if (settled) {
           return;
