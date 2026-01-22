@@ -182,6 +182,11 @@ export class SearchIndex {
   }
 }
 
+// Snippet generation constants
+const SNIPPET_MATCH_WINDOW_BEFORE = 150; // Characters to search before match position
+const SNIPPET_MATCH_WINDOW_AFTER = 250; // Characters to search after match position
+const SNIPPET_CONTEXT_BEFORE_RATIO = 0.35; // Proportion of snippet to show before match
+
 function snippetFor(text: string, tokens: string[], maxLength = 400) {
   const lower = text.toLowerCase();
   
@@ -193,8 +198,8 @@ function snippetFor(text: string, tokens: string[], maxLength = 400) {
     let idx = 0;
     while ((idx = lower.indexOf(token, idx)) !== -1) {
       // Count how many tokens appear near this position
-      const windowStart = Math.max(0, idx - 150);
-      const windowEnd = Math.min(text.length, idx + 250);
+      const windowStart = Math.max(0, idx - SNIPPET_MATCH_WINDOW_BEFORE);
+      const windowEnd = Math.min(text.length, idx + SNIPPET_MATCH_WINDOW_AFTER);
       const window = lower.slice(windowStart, windowEnd);
       
       let matchCount = 0;
@@ -216,7 +221,7 @@ function snippetFor(text: string, tokens: string[], maxLength = 400) {
   }
   
   // Create snippet centered around best match position
-  const contextBefore = Math.floor(maxLength * 0.35);
+  const contextBefore = Math.floor(maxLength * SNIPPET_CONTEXT_BEFORE_RATIO);
   const contextAfter = maxLength - contextBefore;
   const start = Math.max(0, bestIndex - contextBefore);
   const end = Math.min(text.length, bestIndex + contextAfter);
