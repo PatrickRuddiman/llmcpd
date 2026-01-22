@@ -135,64 +135,63 @@ export class DeepCrawler {
 
       let settled = false;
 
+      const cleanupAndResolve = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        this.activeWorkers--;
+        // Explicitly terminate the worker to ensure resources are released promptly.
+        void worker.terminate();
+        resolve();
+      };
+
       worker.on("message", (result: CrawlResult) => {
-        if (!settled) {
-          settled = true;
-          this.activeWorkers--;
+        if (result.error) {
+          if (this.options.verbose) {
+            console.error(`Crawl error for ${result.url}: ${result.error}`);
+          }
+        } else {
+          // Add to results
+          this.results.push({
+            url: result.url,
+            content: result.content,
+            depth: result.depth,
+            section: task.section,
+            title: task.title,
+          });
 
-          if (result.error) {
-            if (this.options.verbose) {
-              console.error(`Crawl error for ${result.url}: ${result.error}`);
-            }
-          } else {
-            // Add to results
-            this.results.push({
-              url: result.url,
-              content: result.content,
-              depth: result.depth,
-              section: task.section,
-              title: task.title,
-            });
-
-            // Add newly discovered links to pending tasks
-            for (const link of result.links) {
-              if (!this.crawledUrls.has(link)) {
-                this.pendingTasks.push({
-                  url: link,
-                  depth: result.depth + 1,
-                  maxDepth: task.maxDepth,
-                  parentUrl: result.url,
-                  section: task.section,
-                  title: `${task.title} (linked)`,
-                });
-              }
+          // Add newly discovered links to pending tasks
+          for (const link of result.links) {
+            if (!this.crawledUrls.has(link)) {
+              this.pendingTasks.push({
+                url: link,
+                depth: result.depth + 1,
+                maxDepth: task.maxDepth,
+                parentUrl: result.url,
+                section: task.section,
+                title: `${task.title} (linked)`,
+              });
             }
           }
-
-          resolve();
         }
+
+        cleanupAndResolve();
       });
 
       worker.on("error", (error) => {
-        if (!settled) {
-          settled = true;
-          this.activeWorkers--;
-          if (this.options.verbose) {
-            console.error(`Worker error for ${task.url}:`, error);
-          }
-          resolve(); // Resolve instead of reject to allow other workers to continue
+        if (this.options.verbose) {
+          console.error(`Worker error for ${task.url}:`, error);
         }
+        // Resolve instead of reject to allow other workers to continue
+        cleanupAndResolve();
       });
 
       worker.on("exit", (code) => {
-        if (!settled) {
-          settled = true;
-          this.activeWorkers--;
-          if (code !== 0 && this.options.verbose) {
-            console.error(`Worker stopped with exit code ${code}`);
-          }
-          resolve();
+        if (code !== 0 && this.options.verbose) {
+          console.error(`Worker stopped with exit code ${code}`);
         }
+        cleanupAndResolve();
       });
     });
   }
