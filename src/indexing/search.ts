@@ -64,12 +64,35 @@ export class SearchIndex {
   private termFreq = new Map<string, Map<string, number>>();
   private docLengths = new Map<string, number>();
   private avgDocLength = 0;
+  private totalDocLength = 0;
 
   // BM25 parameters
   private readonly k1 = 1.5; // term frequency saturation parameter
   private readonly b = 0.75; // length normalization parameter
+  private readonly idfSmoothing = 0.5; // IDF smoothing factor to prevent negative IDF values
 
   upsert(doc: SearchDocument) {
+    // Remove old document data if updating
+    const oldDoc = this.documents.get(doc.id);
+    if (oldDoc) {
+      const oldTokens = tokenize(oldDoc.text);
+      const oldLength = this.docLengths.get(doc.id) ?? 0;
+      
+      // Remove old document length from total
+      this.totalDocLength -= oldLength;
+      
+      // Decrement term document frequencies for old terms
+      const oldUniqueTokens = new Set(oldTokens);
+      for (const token of oldUniqueTokens) {
+        const count = this.termDocFreq.get(token) ?? 0;
+        if (count > 1) {
+          this.termDocFreq.set(token, count - 1);
+        } else {
+          this.termDocFreq.delete(token);
+        }
+      }
+    }
+
     this.documents.set(doc.id, doc);
     const tokens = tokenize(doc.text);
     const freqMap = new Map<string, number>();
@@ -77,27 +100,19 @@ export class SearchIndex {
       freqMap.set(token, (freqMap.get(token) ?? 0) + 1);
     }
     this.termFreq.set(doc.id, freqMap);
-    this.docLengths.set(doc.id, tokens.length);
+    
+    // Update document length tracking
+    const docLength = tokens.length;
+    this.docLengths.set(doc.id, docLength);
+    this.totalDocLength += docLength;
+    this.avgDocLength = this.documents.size > 0 
+      ? this.totalDocLength / this.documents.size 
+      : 0;
 
     const uniqueTokens = new Set(tokens);
     for (const token of uniqueTokens) {
       this.termDocFreq.set(token, (this.termDocFreq.get(token) ?? 0) + 1);
     }
-
-    // Update average document length
-    this.updateAvgDocLength();
-  }
-
-  private updateAvgDocLength() {
-    if (this.docLengths.size === 0) {
-      this.avgDocLength = 0;
-      return;
-    }
-    let totalLength = 0;
-    for (const length of this.docLengths.values()) {
-      totalLength += length;
-    }
-    this.avgDocLength = totalLength / this.docLengths.size;
   }
 
   clear() {
@@ -106,6 +121,7 @@ export class SearchIndex {
     this.termFreq.clear();
     this.docLengths.clear();
     this.avgDocLength = 0;
+    this.totalDocLength = 0;
   }
 
   search(query: string, limit = 5, section?: string): SearchResult[] {
@@ -132,7 +148,7 @@ export class SearchIndex {
         const df = this.termDocFreq.get(token) ?? 1;
         
         // BM25 IDF component
-        const idf = Math.log(1 + (totalDocs - df + 0.5) / (df + 0.5));
+        const idf = Math.log(1 + (totalDocs - df + this.idfSmoothing) / (df + this.idfSmoothing));
         
         // BM25 TF component with length normalization
         const lengthNorm = 1 - this.b + this.b * (docLength / avgLength);
