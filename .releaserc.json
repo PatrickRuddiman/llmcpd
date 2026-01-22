@@ -1,4 +1,4 @@
-s{
+{
   "branches": ["main"],
   "repositoryUrl": "https://github.com/PatrickRuddiman/llmcpd",
   "plugins": [
