@@ -182,17 +182,55 @@ export class SearchIndex {
   }
 }
 
-function snippetFor(text: string, tokens: string[]) {
+// Snippet generation constants
+const SNIPPET_MATCH_WINDOW_BEFORE = 150; // Characters to search before match position
+const SNIPPET_MATCH_WINDOW_AFTER = 250; // Characters to search after match position
+const SNIPPET_CONTEXT_BEFORE_RATIO = 0.35; // Proportion of snippet to show before match
+
+function snippetFor(text: string, tokens: string[], maxLength = 400) {
   const lower = text.toLowerCase();
-  let index = -1;
+  
+  // Find the best position that contains the most tokens
+  let bestIndex = -1;
+  let bestMatchCount = 0;
+  
   for (const token of tokens) {
-    index = lower.indexOf(token);
-    if (index >= 0) break;
+    let idx = 0;
+    while ((idx = lower.indexOf(token, idx)) !== -1) {
+      // Count how many tokens appear near this position
+      const windowStart = Math.max(0, idx - SNIPPET_MATCH_WINDOW_BEFORE);
+      const windowEnd = Math.min(text.length, idx + SNIPPET_MATCH_WINDOW_AFTER);
+      const window = lower.slice(windowStart, windowEnd);
+      
+      let matchCount = 0;
+      for (const t of tokens) {
+        if (window.includes(t)) matchCount++;
+      }
+      
+      if (matchCount > bestMatchCount) {
+        bestMatchCount = matchCount;
+        bestIndex = idx;
+      }
+      idx++;
+    }
   }
-  if (index < 0) {
-    return text.slice(0, 240).trim();
+  
+  if (bestIndex < 0) {
+    // No match found, return start of document
+    return text.slice(0, maxLength).trim();
   }
-  const start = Math.max(0, index - 80);
-  const end = Math.min(text.length, index + 160);
-  return text.slice(start, end).replace(/\s+/g, " ").trim();
+  
+  // Create snippet centered around best match position
+  const contextBefore = Math.floor(maxLength * SNIPPET_CONTEXT_BEFORE_RATIO);
+  const contextAfter = maxLength - contextBefore;
+  const start = Math.max(0, bestIndex - contextBefore);
+  const end = Math.min(text.length, bestIndex + contextAfter);
+  
+  let snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
+  
+  // Add ellipsis if truncated
+  if (start > 0) snippet = "..." + snippet;
+  if (end < text.length) snippet = snippet + "...";
+  
+  return snippet;
 }
