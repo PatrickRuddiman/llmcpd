@@ -2,7 +2,7 @@ import TurndownService from "turndown";
 import { CacheManager } from "./cache.js";
 import { parseLlmsTxt, ParsedLlms, LlmsLink } from "./parser.js";
 import { SearchIndex, SearchResult, SearchDocument } from "./search.js";
-import { DeepCrawler } from "./crawler.js";
+import { DeepCrawler, DEFAULT_MAX_CRAWL_DOCUMENTS } from "./crawler.js";
 
 export interface IndexingOptions {
   llmsUrl: string;
@@ -232,7 +232,7 @@ export class IndexingService {
   private async deepCrawlMarkdownFiles(links: LlmsLink[]): Promise<void> {
     const crawlDepth = this.options.crawlDepth ?? 0;
     const maxWorkers = this.options.maxWorkers ?? 4;
-    const maxCrawlDocs = this.options.maxCrawlDocs ?? 100;
+    const maxCrawlDocs = this.options.maxCrawlDocs ?? DEFAULT_MAX_CRAWL_DOCUMENTS;
 
     if (crawlDepth <= 0) {
       return;

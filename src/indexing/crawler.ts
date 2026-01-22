@@ -7,6 +7,8 @@ import type { CrawlTask, CrawlResult } from "./crawler-worker.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+export const DEFAULT_MAX_CRAWL_DOCUMENTS = 100;
+
 export interface CrawlerOptions {
   maxDepth: number;
   maxWorkers: number;
@@ -62,7 +64,7 @@ export class DeepCrawler {
 
   private async processTasks(): Promise<void> {
     const activePromises = new Set<Promise<void>>();
-    const maxDocuments = this.options.maxDocuments ?? 100;
+    const maxDocuments = this.options.maxDocuments ?? DEFAULT_MAX_CRAWL_DOCUMENTS;
 
     while (this.pendingTasks.length > 0 || this.activeWorkers > 0) {
       // Stop if we've reached the document limit
