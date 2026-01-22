@@ -1,6 +1,6 @@
 {
   "name": "llmcpd",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "LLMs.txt/LLMs-full.txt to MCP server (stdio) with caching and search",
   "license": "MIT",
   "type": "module",
