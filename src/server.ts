@@ -19,11 +19,14 @@ export async function startServer(options: ServerOptions) {
 
   server.tool(
     "search",
-    "Search indexed llms.txt/llms-full content",
+    "Search indexed documentation for relevant content. Use focused keywords rather than full sentences. " +
+    "For complex queries, break them into key terms (e.g., 'confirmSetup payment method' instead of full API names). " +
+    "Returns relevance-ranked results with extended snippets showing context around matches. " +
+    "Increase 'limit' for broader coverage (max 20). Use 'section' to filter by llms.txt section if known.",
     {
-      query: z.string().min(2),
-      limit: z.number().int().min(1).max(20).optional(),
-      section: z.string().optional(),
+      query: z.string().min(2).describe("Keywords or terms to search for (e.g., 'stripe payment setup')"),
+      limit: z.number().int().min(1).max(20).optional().describe("Maximum results to return (default: 5)"),
+      section: z.string().optional().describe("Filter results to specific llms.txt section"),
     },
     async ({ query, limit, section }) => {
       const results = indexing.search(query, limit, section);
@@ -40,9 +43,10 @@ export async function startServer(options: ServerOptions) {
 
   server.tool(
     "fetch",
-    "Fetch cached content for a URL referenced in llms.txt",
+    "Fetch full cached content for a specific URL. Use after 'search' to get complete documentation " +
+    "when snippets aren't sufficient. Returns up to 12,000 characters of the document.",
     {
-      url: z.string().url(),
+      url: z.string().url().describe("Full URL of the document to fetch"),
     },
     async ({ url }) => {
       const doc = indexing.getDocument(url);

@@ -182,17 +182,50 @@ export class SearchIndex {
   }
 }
 
-function snippetFor(text: string, tokens: string[]) {
+function snippetFor(text: string, tokens: string[], maxLength = 400) {
   const lower = text.toLowerCase();
-  let index = -1;
+  
+  // Find the best position that contains the most tokens
+  let bestIndex = -1;
+  let bestMatchCount = 0;
+  
   for (const token of tokens) {
-    index = lower.indexOf(token);
-    if (index >= 0) break;
+    let idx = 0;
+    while ((idx = lower.indexOf(token, idx)) !== -1) {
+      // Count how many tokens appear near this position
+      const windowStart = Math.max(0, idx - 150);
+      const windowEnd = Math.min(text.length, idx + 250);
+      const window = lower.slice(windowStart, windowEnd);
+      
+      let matchCount = 0;
+      for (const t of tokens) {
+        if (window.includes(t)) matchCount++;
+      }
+      
+      if (matchCount > bestMatchCount) {
+        bestMatchCount = matchCount;
+        bestIndex = idx;
+      }
+      idx++;
+    }
   }
-  if (index < 0) {
-    return text.slice(0, 240).trim();
+  
+  if (bestIndex < 0) {
+    // No match found, return start of document
+    return text.slice(0, maxLength).trim();
   }
-  const start = Math.max(0, index - 80);
-  const end = Math.min(text.length, index + 160);
-  return text.slice(start, end).replace(/\s+/g, " ").trim();
+  
+  // Create snippet centered around best match position
+  const contextBefore = Math.floor(maxLength * 0.35);
+  const contextAfter = maxLength - contextBefore;
+  const start = Math.max(0, bestIndex - contextBefore);
+  const end = Math.min(text.length, bestIndex + contextAfter);
+  
+  let snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
+  
+  // Add ellipsis if truncated
+  if (start > 0) snippet = "..." + snippet;
+  if (end < text.length) snippet = snippet + "...";
+  
+  return snippet;
 }
