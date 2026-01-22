@@ -22,7 +22,6 @@ jobs:
         with:
           node-version: 'lts/*'
           cache: npm
-          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run build
       - name: Generate GitHub App Token
