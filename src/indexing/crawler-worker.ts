@@ -1,5 +1,8 @@
 import { parentPort, workerData } from "worker_threads";
 import TurndownService from "turndown";
+import { createHash } from "crypto";
+import { promises as fs } from "fs";
+import { join } from "path";
 
 export interface CrawlTask {
   url: string;
@@ -20,9 +23,48 @@ export interface CrawlResult {
 
 interface WorkerData {
   task: CrawlTask;
+  cacheDir: string;
+}
+
+interface CacheEntry {
+  url: string;
+  fetchedAt: string;
+  status: number;
+  ok: boolean;
+  contentType?: string;
+  etag?: string | null;
+  lastModified?: string | null;
+  content: string;
 }
 
 const turndown = new TurndownService();
+
+// Cache helper functions
+function hashUrl(url: string): string {
+  return createHash("sha256").update(url).digest("hex");
+}
+
+function getCachePath(cacheDir: string, url: string): string {
+  return join(cacheDir, `${hashUrl(url)}.json`);
+}
+
+async function getCached(cacheDir: string, url: string): Promise<CacheEntry | null> {
+  try {
+    const data = await fs.readFile(getCachePath(cacheDir, url), "utf-8");
+    return JSON.parse(data) as CacheEntry;
+  } catch {
+    return null;
+  }
+}
+
+async function setCached(cacheDir: string, entry: CacheEntry): Promise<void> {
+  try {
+    await fs.mkdir(cacheDir, { recursive: true });
+    await fs.writeFile(getCachePath(cacheDir, entry.url), JSON.stringify(entry, null, 2));
+  } catch {
+    // Ignore cache write errors
+  }
+}
 
 // Extract markdown links from content
 function extractMarkdownLinks(content: string, baseUrl: string): string[] {
@@ -32,6 +74,12 @@ function extractMarkdownLinks(content: string, baseUrl: string): string[] {
 
   while ((match = linkRegex.exec(content)) !== null) {
     const url = match[2];
+    
+    // Skip anchor-only links that start with #
+    if (url.startsWith("#")) {
+      continue;
+    }
+    
     // Only include markdown files
     if (url.endsWith(".md") || url.includes(".md#")) {
       try {
@@ -47,25 +95,59 @@ function extractMarkdownLinks(content: string, baseUrl: string): string[] {
   return [...new Set(links)]; // Remove duplicates
 }
 
-// Fetch content with error handling
-async function fetchContent(url: string): Promise<{ content: string; contentType?: string; ok: boolean; status?: number }> {
+// Fetch content with caching support
+async function fetchContent(cacheDir: string, url: string): Promise<{ content: string; contentType?: string; ok: boolean; status?: number }> {
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      return { content: "", ok: false, status: response.status };
+    const cached = await getCached(cacheDir, url);
+    const headers: Record<string, string> = {};
+    
+    if (cached?.etag) headers["If-None-Match"] = cached.etag;
+    if (cached?.lastModified) headers["If-Modified-Since"] = cached.lastModified;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(url, { headers, signal: controller.signal });
+      
+      // Return cached content if not modified
+      if (response.status === 304 && cached) {
+        return { content: cached.content, contentType: cached.contentType, ok: true };
+      }
+
+      if (!response.ok) {
+        return { content: "", ok: false, status: response.status };
+      }
+
+      const content = await response.text();
+      const contentType = response.headers.get("content-type") || undefined;
+      
+      // Cache the result
+      const entry: CacheEntry = {
+        url,
+        fetchedAt: new Date().toISOString(),
+        status: response.status,
+        ok: response.ok,
+        contentType,
+        etag: response.headers.get("etag"),
+        lastModified: response.headers.get("last-modified"),
+        content,
+      };
+      await setCached(cacheDir, entry);
+      
+      return { content, contentType, ok: true };
+    } finally {
+      clearTimeout(timeout);
     }
-    const content = await response.text();
-    const contentType = response.headers.get("content-type") || undefined;
-    return { content, contentType, ok: true };
   } catch (error) {
     return { content: "", ok: false };
   }
 }
 
 // Main worker logic
-async function crawl(task: CrawlTask): Promise<CrawlResult> {
+async function crawl(task: CrawlTask, cacheDir: string): Promise<CrawlResult> {
   try {
-    const result = await fetchContent(task.url);
+    const result = await fetchContent(cacheDir, task.url);
     
     if (!result.ok) {
       return {
@@ -109,7 +191,7 @@ async function crawl(task: CrawlTask): Promise<CrawlResult> {
 // Execute the worker
 if (parentPort && workerData) {
   const data = workerData as WorkerData;
-  crawl(data.task)
+  crawl(data.task, data.cacheDir)
     .then((result) => {
       parentPort!.postMessage(result);
     })

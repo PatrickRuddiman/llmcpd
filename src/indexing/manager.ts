@@ -246,6 +246,7 @@ export class IndexingService {
       maxDepth: crawlDepth,
       maxWorkers,
       maxDocuments: maxCrawlDocs,
+      cacheDir: this.options.cacheDir,
       verbose: this.options.verbose,
     });
 
@@ -268,11 +269,12 @@ export class IndexingService {
     const crawledDocs = await crawler.crawl(initialUrls);
 
     // Add crawled documents to the index
+    // Skip depth-0 documents as they were already indexed in indexLink
     for (const doc of crawledDocs) {
-      // Skip depth-0 documents here, as they were already indexed in indexLink
-      if (doc.depth <= 0) {
+      if (doc.depth === 0) {
         continue;
       }
+      
       const docId = `${doc.url}-depth-${doc.depth}`;
       await this.addDocument({
         id: docId,
@@ -284,10 +286,10 @@ export class IndexingService {
       });
     }
 
-    this.status.deepCrawledPages = crawledDocs.length;
+    this.status.deepCrawledPages = crawledDocs.filter(doc => doc.depth > 0).length;
 
     if (this.options.verbose) {
-      console.error(`Deep crawl completed: ${crawledDocs.length} documents indexed`);
+      console.error(`Deep crawl completed: ${this.status.deepCrawledPages} documents indexed`);
     }
   }
 }

@@ -13,6 +13,7 @@ export interface CrawlerOptions {
   maxDepth: number;
   maxWorkers: number;
   maxDocuments?: number;
+  cacheDir: string;
   verbose?: boolean;
 }
 
@@ -119,8 +120,23 @@ export class DeepCrawler {
   }
 
   private async runWorker(task: CrawlTask): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       let settled = false;
+      let worker: Worker | null = null;
+
+      const cleanupAndResolve = () => {
+        if (settled) return;
+        settled = true;
+        this.activeWorkers--;
+        
+        // Explicitly terminate the worker to ensure resources are released promptly
+        if (worker) {
+          worker.terminate().catch(() => {
+            // Ignore termination errors
+          });
+        }
+        resolve();
+      };
 
       // Resolve worker path relative to the current module
       // When bundled, this will be in dist/chunk-*.js, but the worker is in dist/indexing/
@@ -137,43 +153,29 @@ export class DeepCrawler {
 
       // If no valid worker path could be found, log and resolve without starting a worker
       if (!workerPath) {
-        this.activeWorkers--;
-        settled = true;
         if (this.options.verbose) {
           console.error(
-            "Unable to locate crawler worker file. Tried paths:",
-            primaryPath,
-            alternativePath,
+            `Unable to locate crawler worker file. Tried paths: ${primaryPath}, ${alternativePath}`
           );
         }
-        resolve();
+        cleanupAndResolve();
         return;
       }
 
-      let worker: Worker;
       try {
         worker = new Worker(workerPath, {
-          workerData: { task },
+          workerData: { 
+            task,
+            cacheDir: this.options.cacheDir,
+          },
         });
       } catch (error) {
-        this.activeWorkers--;
-        settled = true;
         if (this.options.verbose) {
           console.error(`Failed to start worker for ${task.url}:`, error);
         }
-        resolve();
+        cleanupAndResolve();
         return;
       }
-      const cleanupAndResolve = () => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        this.activeWorkers--;
-        // Explicitly terminate the worker to ensure resources are released promptly.
-        void worker.terminate();
-        resolve();
-      };
 
       worker.on("message", (result: CrawlResult) => {
         if (result.error) {
@@ -212,7 +214,6 @@ export class DeepCrawler {
         if (this.options.verbose) {
           console.error(`Worker error for ${task.url}:`, error);
         }
-        // Resolve instead of reject to allow other workers to continue
         cleanupAndResolve();
       });
 
