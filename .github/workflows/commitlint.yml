@@ -1,0 +1,55 @@
+name: Commitlint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  lint-fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install fabric
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/danielmiessler/fabric/main/scripts/installer/install.sh | bash
+      - name: Lint PR squash commit (title + desc) and auto-fix with fabric if needed
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_BASE_URL: "https://api.openai.com/v1"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          mkdir -p "$HOME/.config/fabric"
+          touch "$HOME/.config/fabric/.env"
+          fabric -U
+          COMMITLINT_ERRORS=$(mktemp)
+          if echo -e "${{ github.event.pull_request.title }}\n\n${{ github.event.pull_request.body }}" | npx -y commitlint >"$COMMITLINT_ERRORS" 2>&1; then
+            exit 0
+          fi
+          TMP_CHANGELOG=$(mktemp)
+          COMMITS=$(git rev-list --reverse origin/main..HEAD)
+          for COMMIT in $COMMITS; do
+            echo "Summarizing $COMMIT..."
+            git show $COMMIT --no-patch --format="%h %s" >> "$TMP_CHANGELOG"
+            git --no-pager diff $COMMIT^ $COMMIT | fabric -m gpt-5-mini -p summarize_git_diff >> "$TMP_CHANGELOG"
+            echo -e "\n---\n" >> "$TMP_CHANGELOG"
+          done
+          COMMITLINT_MESSAGE=$(cat "$COMMITLINT_ERRORS")
+          NEW_BODY=$(cat "$TMP_CHANGELOG" | fabric -m gpt-5-mini -u https://www.conventionalcommits.org/en/v1.0.0/#summary "write a pull request description that passes commitlint. STRICT rules: 1) Use conventional commits structure: <type>[optional scope]: <description> on the first line. 2) Body starts after a blank line. 3) Footers (if any) after a blank line. 4) Hard-wrap ALL body/footer lines to <=100 characters. 5) Use short sentences and bullet lists that wrap at <=100 chars. 6) Avoid long raw URLs; use markdown links. 7) No trailing spaces. Include these commitlint errors and fix them: $COMMITLINT_MESSAGE. Start with a brief summary of key changes (fix, feat, chore, BREAKING CHANGE). Then a changelog of commits. Based on the following commits (do not add commentary as it will be used directly in the PR):")
+          PR_COMMITS=$(gh pr view $PR_NUMBER --json commits | jq -r '.commits[] | "\(.messageHeadline): \(.messageBody)"' | paste -sd ", " -)
+          NEW_TITLE=$(fabric -m gpt-5-mini "write a conventional commits compatible title that passes commitlint. STRICT rules: 1) Format must be <type>[optional scope]: <description>. 2) Use an imperative, present-tense description. 3) Keep the entire title <=100 characters. 4) No trailing period. 5) If breaking change, add ! after type or scope. commitlint errors: $COMMITLINT_MESSAGE. commits: $PR_COMMITS; body: $NEW_BODY")
+          rm -f "$TMP_CHANGELOG" "$COMMITLINT_ERRORS"
+          gh pr edit $PR_NUMBER --title "$NEW_TITLE" --body "$NEW_BODY"
+          echo -e "$NEW_TITLE\n\n$NEW_BODY" | npx -y commitlint
