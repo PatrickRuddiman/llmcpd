@@ -4,6 +4,10 @@
   "description": "LLMs.txt/LLMs-full.txt to MCP server (stdio) with caching and search",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PatrickRuddiman/llmcpd"
+  },
   "bin": {
     "llmcpd": "dist/cli.js"
   },
