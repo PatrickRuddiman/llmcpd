@@ -24,9 +24,19 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Validate GitHub App Secrets
+        run: |
+          if [ -z "${{ secrets.SR_APP_ID }}" ]; then
+            echo "::error::SR_APP_ID secret is not set. Please configure it in repository secrets."
+            exit 1
+          fi
+          if [ -z "${{ secrets.SR_PRIVATE_KEY }}" ]; then
+            echo "::error::SR_PRIVATE_KEY secret is not set. Please configure it in repository secrets."
+            echo "::error::The private key must be in PEM format (including -----BEGIN RSA PRIVATE KEY----- header/footer)."
+            exit 1
+          fi
       - name: Generate GitHub App Token
         id: app-token
-        continue-on-error: true
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.SR_APP_ID }}
@@ -37,4 +47,4 @@ jobs:
           git config --global user.email "semantic-release-idty[bot]@users.noreply.github.com"
       - run: npx semantic-release
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
