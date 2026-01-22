@@ -26,6 +26,7 @@ jobs:
       - run: npm run build
       - name: Generate GitHub App Token
         id: app-token
+        continue-on-error: true
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.SR_APP_ID }}
@@ -36,4 +37,4 @@ jobs:
           git config --global user.email "semantic-release-idty[bot]@users.noreply.github.com"
       - run: npx semantic-release
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
