@@ -20,7 +20,6 @@ export interface CrawlResult {
 
 interface WorkerData {
   task: CrawlTask;
-  fetchFunc: string;
 }
 
 const turndown = new TurndownService();
