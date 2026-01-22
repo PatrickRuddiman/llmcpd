@@ -17,6 +17,7 @@ program
   .option("--full", "Prefer llms-full.txt if available")
   .option("--crawl-depth <depth>", "Depth to crawl nested markdown files (0 = disabled)", "0")
   .option("--max-workers <count>", "Maximum concurrent workers for deep crawling", "4")
+  .option("--max-crawl-docs <count>", "Maximum documents to crawl during deep crawling", "100")
   .option("--verbose", "Verbose logging", false)
   .parse(process.argv);
 
@@ -31,6 +32,7 @@ const refreshMinutes = Number(options.refreshMins ?? 60);
 const maxPages = Number(options.maxPages ?? 40);
 const crawlDepth = Number(options.crawlDepth ?? 0);
 const maxWorkers = Number(options.maxWorkers ?? 4);
+const maxCrawlDocs = Number(options.maxCrawlDocs ?? 100);
 
 await startServer({
   llmsUrl: options.url,
@@ -40,5 +42,6 @@ await startServer({
   preferFull: Boolean(options.full),
   crawlDepth,
   maxWorkers,
+  maxCrawlDocs,
   verbose: Boolean(options.verbose),
 });

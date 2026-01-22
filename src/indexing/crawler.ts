@@ -10,6 +10,7 @@ const __dirname = dirname(__filename);
 export interface CrawlerOptions {
   maxDepth: number;
   maxWorkers: number;
+  maxDocuments?: number;
   verbose?: boolean;
 }
 
@@ -60,13 +61,24 @@ export class DeepCrawler {
   }
 
   private async processTasks(): Promise<void> {
-    const workerPromises: Promise<void>[] = [];
+    const activePromises = new Set<Promise<void>>();
+    const maxDocuments = this.options.maxDocuments ?? 100;
 
     while (this.pendingTasks.length > 0 || this.activeWorkers > 0) {
+      // Stop if we've reached the document limit
+      if (this.results.length >= maxDocuments) {
+        if (this.options.verbose) {
+          console.error(`Reached max document limit (${maxDocuments}), stopping crawl`);
+        }
+        this.pendingTasks = [];
+        break;
+      }
+
       // Start workers up to the max limit
       while (
         this.pendingTasks.length > 0 &&
-        this.activeWorkers < this.options.maxWorkers
+        this.activeWorkers < this.options.maxWorkers &&
+        this.results.length < maxDocuments
       ) {
         const task = this.pendingTasks.shift()!;
         
@@ -79,12 +91,17 @@ export class DeepCrawler {
         this.activeWorkers++;
 
         const workerPromise = this.runWorker(task);
-        workerPromises.push(workerPromise);
+        activePromises.add(workerPromise);
+        
+        // Remove promise from set when it completes
+        workerPromise.finally(() => {
+          activePromises.delete(workerPromise);
+        });
       }
 
       // Wait for at least one worker to complete if we're at max capacity
-      if (this.activeWorkers >= this.options.maxWorkers && workerPromises.length > 0) {
-        await Promise.race(workerPromises);
+      if (this.activeWorkers >= this.options.maxWorkers && activePromises.size > 0) {
+        await Promise.race(activePromises);
       }
 
       // Small delay to prevent tight loop
@@ -94,7 +111,9 @@ export class DeepCrawler {
     }
 
     // Wait for all remaining workers
-    await Promise.all(workerPromises);
+    if (activePromises.size > 0) {
+      await Promise.all(activePromises);
+    }
   }
 
   private async runWorker(task: CrawlTask): Promise<void> {

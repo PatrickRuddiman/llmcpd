@@ -20,14 +20,15 @@ npx -y llmcpd --url https://example.com/llms.txt
 ## CLI Options
 
 ```
---url <url>           URL to llms.txt (required)
---cache-dir <path>    Cache directory (default: OS temp)
---refresh-mins <n>    Background reindex interval in minutes (default: 60)
---max-pages <n>       Maximum pages to index (default: 40)
---full                Prefer llms-full.txt if available
---crawl-depth <n>     Depth to crawl nested markdown files (default: 0, disabled)
---max-workers <n>     Maximum concurrent workers for deep crawling (default: 4)
---verbose             Verbose logging
+--url <url>              URL to llms.txt (required)
+--cache-dir <path>       Cache directory (default: OS temp)
+--refresh-mins <n>       Background reindex interval in minutes (default: 60)
+--max-pages <n>          Maximum pages to index (default: 40)
+--full                   Prefer llms-full.txt if available
+--crawl-depth <n>        Depth to crawl nested markdown files (default: 0, disabled)
+--max-workers <n>        Maximum concurrent workers for deep crawling (default: 4)
+--max-crawl-docs <n>     Maximum documents to crawl during deep crawling (default: 100)
+--verbose                Verbose logging
 ```
 
 ## MCP Tools
@@ -56,6 +57,7 @@ node dist/cli.js --url https://example.com/llms.txt
 - Deep crawling (`--crawl-depth`) uses worker threads to parallelize fetching and indexing of nested markdown files.
 - Set `--crawl-depth 1` to index markdown files linked from the main pages, `--crawl-depth 2` for two levels, etc.
 - Deep crawling only follows markdown links (`.md` files) to keep the corpus focused.
+- Use `--max-crawl-docs` to limit total documents crawled and prevent memory issues (default: 100).
 
 ## License
 

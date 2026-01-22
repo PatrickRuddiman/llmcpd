@@ -12,6 +12,7 @@ export interface IndexingOptions {
   verbose?: boolean;
   crawlDepth?: number;
   maxWorkers?: number;
+  maxCrawlDocs?: number;
 }
 
 export interface IndexStatus {
@@ -231,18 +232,20 @@ export class IndexingService {
   private async deepCrawlMarkdownFiles(links: LlmsLink[]): Promise<void> {
     const crawlDepth = this.options.crawlDepth ?? 0;
     const maxWorkers = this.options.maxWorkers ?? 4;
+    const maxCrawlDocs = this.options.maxCrawlDocs ?? 100;
 
     if (crawlDepth <= 0) {
       return;
     }
 
     if (this.options.verbose) {
-      console.error(`Starting deep crawl with depth ${crawlDepth} and ${maxWorkers} workers`);
+      console.error(`Starting deep crawl with depth ${crawlDepth}, ${maxWorkers} workers, max ${maxCrawlDocs} docs`);
     }
 
     const crawler = new DeepCrawler({
       maxDepth: crawlDepth,
       maxWorkers,
+      maxDocuments: maxCrawlDocs,
       verbose: this.options.verbose,
     });
 
