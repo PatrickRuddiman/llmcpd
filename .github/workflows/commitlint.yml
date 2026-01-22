@@ -39,7 +39,9 @@ jobs:
             exit 0
           fi
           TMP_CHANGELOG=$(mktemp)
-          COMMITS=$(git rev-list --reverse origin/main..HEAD)
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          COMMITS=$(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
           for COMMIT in $COMMITS; do
             echo "Summarizing $COMMIT..."
             git show $COMMIT --no-patch --format="%h %s" >> "$TMP_CHANGELOG"
