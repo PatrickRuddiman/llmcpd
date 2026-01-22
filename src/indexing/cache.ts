@@ -68,6 +68,21 @@ export class CacheManager {
       };
       await this.set(entry);
       return entry;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        const entry: CacheEntry = {
+          url,
+          fetchedAt: new Date().toISOString(),
+          status: 408,
+          ok: false,
+          contentType: undefined,
+          etag: null,
+          lastModified: null,
+          content: "",
+        };
+        return entry;
+      }
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
