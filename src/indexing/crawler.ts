@@ -1,6 +1,7 @@
 import { Worker } from "worker_threads";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { existsSync } from "fs";
 import type { CrawlTask, CrawlResult } from "./crawler-worker.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -98,7 +99,15 @@ export class DeepCrawler {
 
   private async runWorker(task: CrawlTask): Promise<void> {
     return new Promise((resolve, reject) => {
-      const workerPath = join(__dirname, "crawler-worker.js");
+      // Resolve worker path relative to the current module
+      // When bundled, this will be in dist/chunk-*.js, but the worker is in dist/indexing/
+      let workerPath = join(__dirname, "crawler-worker.js");
+      
+      // Try alternative path for bundled version
+      if (!existsSync(workerPath)) {
+        workerPath = join(__dirname, "indexing", "crawler-worker.js");
+      }
+      
       const worker = new Worker(workerPath, {
         workerData: { task },
       });
