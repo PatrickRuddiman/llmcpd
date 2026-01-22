@@ -15,6 +15,7 @@ npx -y llmcpd --url https://example.com/llms.txt
 - Disk cache with ETag/Last-Modified support.
 - Markdown fallback for HTML pages (`.md` URLs).
 - Optional `llms-full.txt` ingestion.
+- **Deep crawling of nested markdown files using worker threads** for expanded search corpus.
 
 ## CLI Options
 
@@ -24,6 +25,8 @@ npx -y llmcpd --url https://example.com/llms.txt
 --refresh-mins <n>    Background reindex interval in minutes (default: 60)
 --max-pages <n>       Maximum pages to index (default: 40)
 --full                Prefer llms-full.txt if available
+--crawl-depth <n>     Depth to crawl nested markdown files (default: 0, disabled)
+--max-workers <n>     Maximum concurrent workers for deep crawling (default: 4)
 --verbose             Verbose logging
 ```
 
@@ -47,9 +50,12 @@ node dist/cli.js --url https://example.com/llms.txt
 
 ## Notes
 
-- This project is optimized for fast local lookups, not deep crawling.
+- This project is optimized for fast local lookups with optional deep crawling.
 - For large docs, prefer using `llms-full.txt`.
 - Indexing respects `--max-pages` to avoid overload.
+- Deep crawling (`--crawl-depth`) uses worker threads to parallelize fetching and indexing of nested markdown files.
+- Set `--crawl-depth 1` to index markdown files linked from the main pages, `--crawl-depth 2` for two levels, etc.
+- Deep crawling only follows markdown links (`.md` files) to keep the corpus focused.
 
 ## License
 

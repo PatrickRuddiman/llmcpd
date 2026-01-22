@@ -2,6 +2,7 @@ import TurndownService from "turndown";
 import { CacheManager } from "./cache.js";
 import { parseLlmsTxt, ParsedLlms, LlmsLink } from "./parser.js";
 import { SearchIndex, SearchResult, SearchDocument } from "./search.js";
+import { DeepCrawler } from "./crawler.js";
 
 export interface IndexingOptions {
   llmsUrl: string;
@@ -9,6 +10,8 @@ export interface IndexingOptions {
   maxPages: number;
   preferFull: boolean;
   verbose?: boolean;
+  crawlDepth?: number;
+  maxWorkers?: number;
 }
 
 export interface IndexStatus {
@@ -19,6 +22,7 @@ export interface IndexStatus {
   cacheDir: string;
   lastError?: string;
   inProgress: boolean;
+  deepCrawledPages?: number;
 }
 
 export interface CachedDocument {
@@ -83,6 +87,7 @@ export class IndexingService {
   async indexAll(): Promise<void> {
     this.status.inProgress = true;
     this.status.lastError = undefined;
+    this.status.deepCrawledPages = 0;
     try {
       const llmsEntry = await this.cache.fetch(this.options.llmsUrl);
       if (!llmsEntry.ok) {
@@ -122,6 +127,11 @@ export class IndexingService {
       const maxPages = Math.max(1, this.options.maxPages);
       for (const link of targets.slice(0, maxPages)) {
         await this.indexLink(link);
+      }
+
+      // Perform deep crawling if enabled
+      if (this.options.crawlDepth && this.options.crawlDepth > 0) {
+        await this.deepCrawlMarkdownFiles(targets.slice(0, maxPages));
       }
 
       this.status.lastIndexedAt = new Date().toISOString();
@@ -216,6 +226,62 @@ export class IndexingService {
       return this.turndown.turndown(content);
     }
     return content;
+  }
+
+  private async deepCrawlMarkdownFiles(links: LlmsLink[]): Promise<void> {
+    const crawlDepth = this.options.crawlDepth ?? 0;
+    const maxWorkers = this.options.maxWorkers ?? 4;
+
+    if (crawlDepth <= 0) {
+      return;
+    }
+
+    if (this.options.verbose) {
+      console.error(`Starting deep crawl with depth ${crawlDepth} and ${maxWorkers} workers`);
+    }
+
+    const crawler = new DeepCrawler({
+      maxDepth: crawlDepth,
+      maxWorkers,
+      verbose: this.options.verbose,
+    });
+
+    // Prepare initial URLs for crawling (only markdown files)
+    const initialUrls = links
+      .filter(link => link.url.endsWith(".md") || link.url.includes(".md#"))
+      .map(link => ({
+        url: link.url,
+        section: link.section,
+        title: link.title,
+      }));
+
+    if (initialUrls.length === 0) {
+      if (this.options.verbose) {
+        console.error("No markdown files found to crawl");
+      }
+      return;
+    }
+
+    const crawledDocs = await crawler.crawl(initialUrls);
+
+    // Add crawled documents to the index
+    for (const doc of crawledDocs) {
+      const docId = `${doc.url}-depth-${doc.depth}`;
+      await this.addDocument({
+        id: docId,
+        url: doc.url,
+        title: doc.title,
+        section: doc.section,
+        optional: doc.depth > 0, // Mark deeper documents as optional
+        content: doc.content,
+      });
+    }
+
+    this.status.deepCrawledPages = crawledDocs.length;
+
+    if (this.options.verbose) {
+      console.error(`Deep crawl completed: ${crawledDocs.length} documents indexed`);
+    }
   }
 }
 
