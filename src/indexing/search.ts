@@ -62,6 +62,12 @@ export class SearchIndex {
   private documents = new Map<string, SearchDocument>();
   private termDocFreq = new Map<string, number>();
   private termFreq = new Map<string, Map<string, number>>();
+  private docLengths = new Map<string, number>();
+  private avgDocLength = 0;
+
+  // BM25 parameters
+  private readonly k1 = 1.5; // term frequency saturation parameter
+  private readonly b = 0.75; // length normalization parameter
 
   upsert(doc: SearchDocument) {
     this.documents.set(doc.id, doc);
@@ -71,17 +77,35 @@ export class SearchIndex {
       freqMap.set(token, (freqMap.get(token) ?? 0) + 1);
     }
     this.termFreq.set(doc.id, freqMap);
+    this.docLengths.set(doc.id, tokens.length);
 
     const uniqueTokens = new Set(tokens);
     for (const token of uniqueTokens) {
       this.termDocFreq.set(token, (this.termDocFreq.get(token) ?? 0) + 1);
     }
+
+    // Update average document length
+    this.updateAvgDocLength();
+  }
+
+  private updateAvgDocLength() {
+    if (this.docLengths.size === 0) {
+      this.avgDocLength = 0;
+      return;
+    }
+    let totalLength = 0;
+    for (const length of this.docLengths.values()) {
+      totalLength += length;
+    }
+    this.avgDocLength = totalLength / this.docLengths.size;
   }
 
   clear() {
     this.documents.clear();
     this.termDocFreq.clear();
     this.termFreq.clear();
+    this.docLengths.clear();
+    this.avgDocLength = 0;
   }
 
   search(query: string, limit = 5, section?: string): SearchResult[] {
@@ -99,13 +123,26 @@ export class SearchIndex {
       if (!freqMap) continue;
 
       let score = 0;
+      const docLength = this.docLengths.get(id) ?? 1;
+      const avgLength = Math.max(1, this.avgDocLength);
+      
       for (const token of tokens) {
         const tf = freqMap.get(token) ?? 0;
         if (!tf) continue;
         const df = this.termDocFreq.get(token) ?? 1;
-        const idf = Math.log(1 + totalDocs / df);
-        score += (tf / Math.max(1, doc.text.length)) * idf * 1000;
+        
+        // BM25 IDF component
+        const idf = Math.log(1 + (totalDocs - df + 0.5) / (df + 0.5));
+        
+        // BM25 TF component with length normalization
+        const lengthNorm = 1 - this.b + this.b * (docLength / avgLength);
+        const tfScore = (tf * (this.k1 + 1)) / (tf + this.k1 * lengthNorm);
+        
+        score += idf * tfScore;
       }
+      
+      // Scale score for better readability
+      score *= 100;
 
       if (doc.optional) {
         score *= 0.7;
