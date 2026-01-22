@@ -269,6 +269,10 @@ export class IndexingService {
 
     // Add crawled documents to the index
     for (const doc of crawledDocs) {
+      // Skip depth-0 documents here, as they were already indexed in indexLink
+      if (doc.depth <= 0) {
+        continue;
+      }
       const docId = `${doc.url}-depth-${doc.depth}`;
       await this.addDocument({
         id: docId,
