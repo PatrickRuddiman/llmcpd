@@ -13,7 +13,7 @@ export interface ParsedLlms {
   links: LlmsLink[];
 }
 
-const linkRegex = /-\s+\[([^\]]+)\]\(([^)]+)\)(?::\s*(.*))?/;
+const linkRegex = /-\s+\[([^\]]+)\]\(([^)]+)\)(?:\s*[-\:]\s*(.*))?/;
 
 export function parseLlmsTxt(markdown: string): ParsedLlms {
   const lines = markdown.split(/\r?\n/);
