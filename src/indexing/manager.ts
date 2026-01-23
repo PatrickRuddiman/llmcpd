@@ -85,6 +85,45 @@ export class IndexingService {
     return Array.from(this.documents.values()).find((doc) => doc.url === url);
   }
 
+  async fetchDocument(url: string) {
+    const cached = await this.cache.get(url);
+    if (cached?.ok) {
+      return {
+        url,
+        resolvedUrl: cached.url,
+        content: this.normalizeContent(cached.content, cached.contentType),
+        contentType: cached.contentType,
+        ok: cached.ok,
+        status: cached.status,
+      };
+    }
+
+    if (!url.endsWith(".md")) {
+      const mdUrl = `${url}.md`;
+      const cachedMd = await this.cache.get(mdUrl);
+      if (cachedMd?.ok) {
+        return {
+          url,
+          resolvedUrl: cachedMd.url,
+          content: this.normalizeContent(cachedMd.content, cachedMd.contentType),
+          contentType: cachedMd.contentType,
+          ok: cachedMd.ok,
+          status: cachedMd.status,
+        };
+      }
+    }
+
+    const entry = await this.fetchWithMarkdownFallback(url);
+    return {
+      url,
+      resolvedUrl: entry.url,
+      content: entry.ok ? this.normalizeContent(entry.content, entry.contentType) : "",
+      contentType: entry.contentType,
+      ok: entry.ok,
+      status: entry.status,
+    };
+  }
+
   async indexAll(): Promise<void> {
     this.status.inProgress = true;
     this.status.lastError = undefined;

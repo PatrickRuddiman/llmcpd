@@ -43,19 +43,25 @@ export async function startServer(options: ServerOptions) {
 
   server.tool(
     "fetch",
-    "Fetch full cached content for a specific URL. Use after 'search' to get complete documentation " +
-    "when snippets aren't sufficient. Returns up to 12,000 characters of the document.",
+    "Fetch full content for a specific URL. Uses the cache when available and fetches on cache miss " +
+    "(including trying a .md suffix for HTML pages). If the upstream requires a .md extension, provide " +
+    "the base URL and the server will attempt `<url>.md` automatically. Returns up to 12,000 characters.",
     {
-      url: z.string().url().describe("Full URL of the document to fetch"),
+      url: z
+        .string()
+        .url()
+        .describe(
+          "Full URL of the document to fetch. Use exact URLs from llms.txt; omit .md unless you know it is required."
+        ),
     },
     async ({ url }) => {
-      const doc = indexing.getDocument(url);
-      if (!doc) {
+      const result = await indexing.fetchDocument(url);
+      if (!result.ok) {
         return {
           content: [
             {
               type: "text",
-              text: `No cached document found for ${url}`,
+              text: `Failed to fetch ${url} (status: ${result.status ?? "unknown"})`,
             },
           ],
         };
@@ -65,7 +71,7 @@ export async function startServer(options: ServerOptions) {
         content: [
           {
             type: "text",
-            text: doc.content.slice(0, 12000),
+            text: result.content.slice(0, 12000),
           },
         ],
       };
