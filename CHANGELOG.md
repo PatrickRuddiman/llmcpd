@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/PatrickRuddiman/llmcpd/compare/v1.0.0...v1.1.0) (2026-01-23)
+
+
+### Features
+
+* **fetch:** add cache-aware fetch with .md fallback for MCP fetch tool ([#9](https://github.com/PatrickRuddiman/llmcpd/issues/9)) ([39659c8](https://github.com/PatrickRuddiman/llmcpd/commit/39659c88269821a7f71deeba215e9841f4f33248))
+
 # 1.0.0 (2026-01-22)
 
 
