@@ -44,14 +44,15 @@ export async function startServer(options: ServerOptions) {
   server.tool(
     "fetch",
     "Fetch full content for a specific URL. Uses the cache when available and fetches on cache miss " +
-    "(including trying a .md suffix for HTML pages). If the upstream requires a .md extension, provide " +
-    "the base URL and the server will attempt `<url>.md` automatically. Returns up to 12,000 characters.",
+    "(including trying a .md suffix for HTML pages). Use the exact URL from llms.txt, including any `.md` " +
+    "suffix already present—do not strip it. If the upstream requires a .md extension, provide the base URL " +
+    "and the server will attempt `<url>.md` automatically. Returns up to 12,000 characters.",
     {
       url: z
         .string()
         .url()
         .describe(
-          "Full URL of the document to fetch. Use exact URLs from llms.txt; omit .md unless you know it is required."
+          "Full URL of the document to fetch. Use exact URLs from llms.txt (including .md if present)."
         ),
     },
     async ({ url }) => {
