@@ -36,6 +36,14 @@ export interface CachedDocument {
   contentType?: string;
 }
 
+interface FetchDocumentSource {
+  url: string;
+  content: string;
+  contentType?: string;
+  ok: boolean;
+  status: number;
+}
+
 export class IndexingService {
   private cache: CacheManager;
   private turndown = new TurndownService();
@@ -85,43 +93,35 @@ export class IndexingService {
     return Array.from(this.documents.values()).find((doc) => doc.url === url);
   }
 
+  /**
+   * Fetch a document by URL, using cached content when available and fetching
+   * on cache miss. Automatically attempts a `.md` suffix when the URL is HTML.
+   */
   async fetchDocument(url: string) {
-    const cached = await this.cache.get(url);
-    if (cached?.ok) {
-      return {
-        url,
-        resolvedUrl: cached.url,
-        content: this.normalizeContent(cached.content, cached.contentType),
-        contentType: cached.contentType,
-        ok: cached.ok,
-        status: cached.status,
-      };
-    }
-
-    if (!url.endsWith(".md")) {
-      const mdUrl = `${url}.md`;
-      const cachedMd = await this.cache.get(mdUrl);
-      if (cachedMd?.ok) {
-        return {
-          url,
-          resolvedUrl: cachedMd.url,
-          content: this.normalizeContent(cachedMd.content, cachedMd.contentType),
-          contentType: cachedMd.contentType,
-          ok: cachedMd.ok,
-          status: cachedMd.status,
-        };
-      }
-    }
-
-    const entry = await this.fetchWithMarkdownFallback(url);
-    return {
+    const toResult = (entry: FetchDocumentSource) => ({
       url,
       resolvedUrl: entry.url,
       content: entry.ok ? this.normalizeContent(entry.content, entry.contentType) : "",
       contentType: entry.contentType,
       ok: entry.ok,
       status: entry.status,
-    };
+    });
+
+    const cached = await this.cache.get(url);
+    if (cached?.ok) {
+      return toResult(cached);
+    }
+
+    if (!url.endsWith(".md")) {
+      const mdUrl = `${url}.md`;
+      const cachedMd = await this.cache.get(mdUrl);
+      if (cachedMd?.ok) {
+        return toResult(cachedMd);
+      }
+    }
+
+    const entry = await this.fetchWithMarkdownFallback(url);
+    return toResult(entry);
   }
 
   async indexAll(): Promise<void> {
