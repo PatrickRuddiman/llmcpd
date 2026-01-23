@@ -108,14 +108,14 @@ export class IndexingService {
     });
 
     const cached = await this.cache.get(url);
-    if (cached?.ok) {
+    if (cached && cached.ok) {
       return toResult(cached);
     }
 
     if (!url.endsWith(".md")) {
       const mdUrl = `${url}.md`;
       const cachedMd = await this.cache.get(mdUrl);
-      if (cachedMd?.ok) {
+      if (cachedMd && cachedMd.ok) {
         return toResult(cachedMd);
       }
     }
