@@ -34,7 +34,7 @@ npx -y llmcpd --url https://example.com/llms.txt
 ## MCP Tools
 
 - `search` — Search indexed content
-- `fetch` — Fetch cached content for a URL
+- `fetch` — Fetch content for a URL (use the exact llms.txt link, including any `.md` suffix; cache + `.md` fallback)
 - `list_sections` — List sections from llms.txt
 - `list_links` — List links (optionally by section)
 - `summary` — Simple summary of cached content
