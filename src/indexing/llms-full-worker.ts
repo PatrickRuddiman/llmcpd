@@ -148,10 +148,10 @@ if (parentPort && workerData) {
   const data = workerData as WorkerData;
   processFullDocument(data.url, data.cacheDir)
     .then((result) => {
-      parentPort!.postMessage(result);
+      parentPort?.postMessage(result);
     })
     .catch((error) => {
-      parentPort!.postMessage({
+      parentPort?.postMessage({
         url: data.url,
         chunks: [],
         error: toErrorMessage(error),

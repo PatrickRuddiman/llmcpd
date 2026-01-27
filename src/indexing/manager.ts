@@ -307,7 +307,11 @@ export class IndexingService {
       const finalize = (payload: { ok: boolean; chunks: FullChunk[]; error?: string }) => {
         if (settled) return;
         settled = true;
-        worker.terminate().catch(() => undefined);
+        worker.terminate().catch((error) => {
+          if (this.options.verbose) {
+            console.error("Failed to terminate llms-full worker:", error);
+          }
+        });
         resolve(payload);
       };
 
