@@ -3,6 +3,11 @@ import { CacheManager } from "./cache.js";
 import { parseLlmsTxt, ParsedLlms, LlmsLink } from "./parser.js";
 import { SearchIndex, SearchResult, SearchDocument } from "./search.js";
 import { DeepCrawler, DEFAULT_MAX_CRAWL_DOCUMENTS } from "./crawler.js";
+import { Worker } from "worker_threads";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { existsSync } from "fs";
+import type { FullChunk } from "./llms-full-worker.js";
 
 export interface IndexingOptions {
   llmsUrl: string;
@@ -34,6 +39,8 @@ export interface CachedDocument {
   optional: boolean;
   content: string;
   contentType?: string;
+  parentUrl?: string;
+  headingLevel?: number;
 }
 
 interface FetchDocumentSource {
@@ -149,18 +156,7 @@ export class IndexingService {
       if (this.options.preferFull) {
         const fullUrl = this.inferFullUrl(this.options.llmsUrl);
         if (fullUrl) {
-          const fullEntry = await this.cache.fetch(fullUrl);
-          if (fullEntry.ok) {
-            await this.addDocument({
-              id: fullUrl,
-              url: fullUrl,
-              title: "llms-full.txt",
-              section: "Full",
-              optional: false,
-              content: fullEntry.content,
-              contentType: fullEntry.contentType,
-            });
-          }
+          await this.indexFullDocument(fullUrl);
         }
       }
 
@@ -223,6 +219,29 @@ export class IndexingService {
     this.searchIndex.upsert(searchDoc);
   }
 
+  private async indexFullDocument(fullUrl: string): Promise<void> {
+    const result = await this.chunkFullDocument(fullUrl);
+    if (!result.ok) {
+      if (this.options.verbose) {
+        console.error(result.error);
+      }
+      return;
+    }
+    for (const chunk of result.chunks) {
+      const chunkId = `${fullUrl}#${chunk.section}`;
+      await this.addDocument({
+        id: chunkId,
+        url: fullUrl,
+        title: chunk.title,
+        section: chunk.section,
+        optional: false,
+        content: chunk.content,
+        parentUrl: fullUrl,
+        headingLevel: chunk.level,
+      });
+    }
+  }
+
   private inferFullUrl(llmsUrl: string): string | null {
     if (llmsUrl.endsWith("/llms.txt")) {
       return llmsUrl.replace(/\/llms\.txt$/, "/llms-full.txt");
@@ -259,6 +278,92 @@ export class IndexingService {
     }
 
     return entry;
+  }
+
+  private async chunkFullDocument(fullUrl: string): Promise<{
+    ok: boolean;
+    chunks: FullChunk[];
+    error?: string;
+  }> {
+    return this.runFullWorker(fullUrl);
+  }
+
+  private async runFullWorker(fullUrl: string): Promise<{
+    ok: boolean;
+    chunks: FullChunk[];
+    error?: string;
+  }> {
+    const workerPath = this.resolveFullWorkerPath();
+    if (!workerPath) {
+      return { ok: false, chunks: [], error: "Unable to locate llms-full worker file." };
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const worker = new Worker(workerPath, {
+        workerData: { url: fullUrl, cacheDir: this.options.cacheDir },
+      });
+
+      const finalize = (payload: { ok: boolean; chunks: FullChunk[]; error?: string }) => {
+        if (settled) return;
+        settled = true;
+        worker.terminate().catch((error) => {
+          if (this.options.verbose) {
+            console.error("Failed to terminate llms-full worker:", error);
+          }
+        });
+        resolve(payload);
+      };
+
+      worker.on("message", (message: { url: string; chunks: FullChunk[]; error?: string }) => {
+        if (message.error) {
+          finalize({ ok: false, chunks: [], error: message.error });
+        } else {
+          finalize({ ok: true, chunks: message.chunks });
+        }
+      });
+
+      worker.on("error", (error) => {
+        finalize({
+          ok: false,
+          chunks: [],
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+
+      worker.on("exit", (code) => {
+        if (settled) {
+          return;
+        }
+        if (code !== 0) {
+          finalize({
+            ok: false,
+            chunks: [],
+            error: `llms-full worker stopped with exit code ${code}`,
+          });
+          return;
+        }
+        finalize({
+          ok: false,
+          chunks: [],
+          error: "llms-full worker exited before sending results",
+        });
+      });
+    });
+  }
+
+  private resolveFullWorkerPath(): string | null {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const primaryPath = join(__dirname, "llms-full-worker.js");
+    const alternativePath = join(__dirname, "indexing", "llms-full-worker.js");
+    if (existsSync(primaryPath)) {
+      return primaryPath;
+    }
+    if (existsSync(alternativePath)) {
+      return alternativePath;
+    }
+    return null;
   }
 
   private normalizeContent(content: string, contentType?: string): string {

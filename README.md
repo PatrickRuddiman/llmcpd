@@ -16,6 +16,7 @@ npx -y llmcpd --url https://example.com/llms.txt
 - Markdown fallback for HTML pages (`.md` URLs).
 - Optional `llms-full.txt` ingestion.
 - **Deep crawling of nested markdown files using worker threads** for expanded search corpus.
+- **Async chunking of llms-full.txt by markdown headings** for faster search.
 
 ## CLI Options
 
@@ -55,6 +56,7 @@ node dist/cli.js --url https://example.com/llms.txt
 - For large docs, prefer using `llms-full.txt`.
 - Indexing respects `--max-pages` to avoid overload.
 - Deep crawling (`--crawl-depth`) uses worker threads to parallelize fetching and indexing of nested markdown files.
+- llms-full.txt indexing chunks sections by markdown headings (`#`/`##`/`###`) in a worker to avoid blocking.
 - Set `--crawl-depth 1` to index markdown files linked from the main pages, `--crawl-depth 2` for two levels, etc.
 - Deep crawling only follows markdown links (`.md` files) to keep the corpus focused.
 - Use `--max-crawl-docs` to limit total documents crawled and prevent memory issues (default: 100).
