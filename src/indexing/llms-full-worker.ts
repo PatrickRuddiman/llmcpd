@@ -20,11 +20,12 @@ interface WorkerResult {
   error?: string;
 }
 
-const turndown = new TurndownService();
 const headingRegex = /^(#{1,6})\s+(.*)$/;
+const DEFAULT_SECTION_TITLE = "Untitled Section";
 
 function normalizeContent(content: string, contentType?: string): string {
   if (contentType?.includes("text/html")) {
+    const turndown = new TurndownService();
     return turndown.turndown(content);
   }
   return content;
@@ -79,7 +80,7 @@ function chunkMarkdown(markdown: string): FullChunk[] {
         pushChunk(current);
       }
       const level = match[1].length;
-      const heading = match[2].trim() || "Untitled Section";
+      const heading = match[2].trim() || DEFAULT_SECTION_TITLE;
       while (headingStack.length && headingStack[headingStack.length - 1].level >= level) {
         headingStack.pop();
       }
@@ -112,6 +113,10 @@ function chunkMarkdown(markdown: string): FullChunk[] {
   return chunks;
 }
 
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function processFullDocument(url: string, cacheDir: string): Promise<WorkerResult> {
   try {
     const cache = new CacheManager(cacheDir);
@@ -134,7 +139,7 @@ async function processFullDocument(url: string, cacheDir: string): Promise<Worke
     return {
       url,
       chunks: [],
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
     };
   }
 }
@@ -149,7 +154,7 @@ if (parentPort && workerData) {
       parentPort!.postMessage({
         url: data.url,
         chunks: [],
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       });
     });
 }
