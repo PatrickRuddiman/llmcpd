@@ -95,9 +95,7 @@ function chunkMarkdown(markdown: string): FullChunk[] {
     }
 
     if (!sawHeading) {
-      if (line.trim()) {
-        preamble.push(line);
-      }
+      preamble.push(line);
       continue;
     }
 
