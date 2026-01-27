@@ -338,13 +338,7 @@ export class IndexingService {
             chunks: [],
             error: `llms-full worker stopped with exit code ${code}`,
           });
-          return;
         }
-        finalize({
-          ok: false,
-          chunks: [],
-          error: "llms-full worker exited before sending results",
-        });
       });
     });
   }

@@ -123,7 +123,7 @@ async function processFullDocument(url: string, cacheDir: string): Promise<Worke
       return {
         url,
         chunks: [],
-        error: `Failed to fetch llms-full.txt (${entry.status})`,
+        error: `Failed to fetch document (${entry.status})`,
       };
     }
 
